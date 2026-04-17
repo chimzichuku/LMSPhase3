@@ -56,6 +56,8 @@ namespace LMS.Controllers
                 Department d = new Department();
                 d.Subject = subject;
                 d.Name = name;
+                db.Departments.Add(d);
+                db.SaveChanges();
                 return Json(new { success = true});
             }
             return Json(new { success = false});

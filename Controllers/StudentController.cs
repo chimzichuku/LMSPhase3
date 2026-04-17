@@ -76,7 +76,22 @@ namespace LMS.Controllers
         /// <returns>The JSON array</returns>
         public IActionResult GetMyClasses(string uid)
         {           
-            return Json(null);
+            var query = 
+                from en in db.Enrolleds
+                where en.StudentId == uid
+                join cl in db.Classes on en.ClassId equals cl.ClassId
+                join co in db.Courses on cl.CourseId equals co.CourseId
+                select new
+                {
+                    subject = co.Subject,
+                    number = co.Number,
+                    name = co.Name,
+                    season = cl.Season,
+                    year = cl.Year,
+                    grade = en.Grade
+                };
+
+            return Json(query.ToArray());
         }
 
         /// <summary>
@@ -95,7 +110,27 @@ namespace LMS.Controllers
         /// <returns>The JSON array</returns>
         public IActionResult GetAssignmentsInClass(string subject, int num, string season, int year, string uid)
         {            
-            return Json(null);
+            var query =
+                from co in db.Courses
+                where co.Subject == subject && co.Number == num
+                join cl in db.Classes on co.CourseId equals cl.CourseId
+                where cl.Season == season && cl.Year == year
+                join ac in db.AssignmentCategories on cl.ClassId equals ac.ClassId
+                join a in db.Assignments on ac.CategoryId equals a.CategoryId
+                join s in db.Submissions
+                    on new { AId = a.AssignmentId, SId = uid }
+                    equals new { AId = s.AssignmentId, SId = s.StudentId }
+                    into joined
+                from j in joined.DefaultIfEmpty()
+                select new
+                {
+                    aname = a.Name,
+                    cname = ac.Name,
+                    due = a.Due,
+                    score = j == null ? (uint?)null : j.Score
+                };
+
+            return Json(query.ToArray());
         }
 
 
@@ -120,7 +155,40 @@ namespace LMS.Controllers
         public IActionResult SubmitAssignmentText(string subject, int num, string season, int year,
           string category, string asgname, string uid, string contents)
         {           
-            return Json(new { success = false });
+            var asgId = (from co in db.Courses
+                         where co.Subject == subject && co.Number == num
+                         join cl in db.Classes on co.CourseId equals cl.CourseId
+                         where cl.Season == season && cl.Year == year
+                         join ac in db.AssignmentCategories on cl.ClassId equals ac.ClassId
+                         where ac.Name == category
+                         join a in db.Assignments on ac.CategoryId equals a.CategoryId
+                         where a.Name == asgname
+                         select a.AssignmentId).SingleOrDefault();
+            
+            var existing = db.Submissions
+                .SingleOrDefault(s => s.AssignmentId == asgId && s.StudentId == uid);
+
+            if (existing != null)
+            {
+                existing.Contents = contents;
+                existing.Time = DateTime.Now;
+                db.SaveChanges();
+            }
+            else
+            {
+                var sub = new Submission()
+                {
+                    AssignmentId = asgId,
+                    StudentId = uid,
+                    Contents = contents,
+                    Time = DateTime.Now,
+                    Score = 0,
+                };
+                db.Submissions.Add(sub);
+                db.SaveChanges();
+            }
+
+            return Json(new { success = true });
         }
 
 
@@ -136,7 +204,33 @@ namespace LMS.Controllers
         /// false if the student is already enrolled in the class, true otherwise.</returns>
         public IActionResult Enroll(string subject, int num, string season, int year, string uid)
         {          
-            return Json(new { success = false});
+            var cl = (from co in db.Courses
+                      where co.Subject == subject && co.Number == num
+                      join c in db.Classes on co.CourseId equals c.CourseId
+                      where c.Season == season && c.Year == year
+                      select c).SingleOrDefault();
+
+            if (cl == null)
+            {
+                return Json(new { success = false });
+            }
+
+            bool exists = db.Enrolleds.Any(e => e.StudentId == uid && e.ClassId == cl.ClassId);
+
+            if (exists)
+            {
+                return Json(new { success = false });
+            }
+            
+            db.Enrolleds.Add(new Enrolled
+            {
+                StudentId = uid,
+                ClassId = cl.ClassId,
+                Grade = "--"
+            });
+
+            db.SaveChanges();
+            return Json(new { success = true });
         }
 
 
@@ -154,7 +248,43 @@ namespace LMS.Controllers
         /// <returns>A JSON object containing a single field called "gpa" with the number value</returns>
         public IActionResult GetGPA(string uid)
         {            
-            return Json(null);
+            var grades = (from en in db.Enrolleds
+                          where en.StudentId == uid && en.Grade != "--"
+                          select en.Grade).ToList();
+
+            if (!grades.Any())
+            {
+                return Json(new { gpa = 0.0 });
+            }
+
+            double total = grades.Sum(g => GradeToPoints(g));
+            return Json(new { gpa = total / grades.Count});
+        }
+
+        // Helpers
+
+        /// <summary>
+        /// Converts a letter grade to a point value
+        /// </summary>
+        /// <param name="grade">The letter grade to convert</param>
+        /// <returns>The point value of the letter grade</returns>
+        private double GradeToPoints(string grade)
+        {
+            return grade switch
+            {
+                "A" => 4.0,
+                "A-" => 3.7,
+                "B+" => 3.3,
+                "B" => 3.0,
+                "B-" => 2.7,
+                "C+" => 2.3,
+                "C" => 2.0,
+                "C-" => 1.7,
+                "D+" => 1.3,
+                "D" => 1.0,
+                "D-" => 0.7,
+                _ => 0.0,
+            };
         }
                 
         /*******End code to modify********/
