@@ -161,8 +161,8 @@ namespace LMS.Controllers
 
             var check = db.Classes
                 .Any(c => c.Location == location
-                          && c.Start >= TimeOnly.FromDateTime(start)
                           && c.Start <= TimeOnly.FromDateTime(end)
+                          && c.Start >= TimeOnly.FromDateTime(start)
                           && c.Season == season
                           && c.Year == year);
             var courseId = db.Courses
@@ -170,20 +170,30 @@ namespace LMS.Controllers
                 .Select(c => new { c.CourseId })
                 .FirstOrDefault();
             
+            
             if (!check && courseId != null)
             {
                 
-                Class c = new Class();
-                c.CourseId = courseId.CourseId;
-                c.ProfessorId = instructor;
-                c.Year = (uint)year;
-                c.Season = season;
-                c.Location = location;
-                c.Start = TimeOnly.FromDateTime(start);
-                c.End = TimeOnly.FromDateTime(end);
-                db.Classes.Add(c);
-                db.SaveChanges();
-                return Json(new { success = true});
+                var duplicateCourse = db.Classes.Any(c =>
+                    c.CourseId == courseId.CourseId &&
+                    c.Season == season &&
+                    c.Year == year
+                );
+
+                if (!duplicateCourse)
+                {
+                    Class c = new Class();
+                    c.CourseId = courseId.CourseId;
+                    c.ProfessorId = instructor;
+                    c.Year = (uint)year;
+                    c.Season = season;
+                    c.Location = location;
+                    c.Start = TimeOnly.FromDateTime(start);
+                    c.End = TimeOnly.FromDateTime(end);
+                    db.Classes.Add(c);
+                    db.SaveChanges();
+                    return Json(new { success = true});
+                }
             }
             return Json(new { success = false});
         }

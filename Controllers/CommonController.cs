@@ -56,7 +56,11 @@ namespace LMS.Controllers
                     dName = d.Name,
                     courses = db.Courses
                         .Where(c => c.Subject == d.Subject)
-                        .Select(c => new { c.Number, c.Name }).ToList()
+                        .Select(c => new
+                        {
+                            number = c.Number, 
+                            cname = c.Name
+                        }).ToList()
                 });
             return Json(catalog.ToList());
         }

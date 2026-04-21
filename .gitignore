@@ -18,7 +18,7 @@ Thumbs.db
 
 appsettings.Development.json
 
-*.nupkg
+*.nupkgc
 packages/
 
 .dotnet/
